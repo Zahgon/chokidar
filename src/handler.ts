@@ -11,8 +11,10 @@ export type Path = string;
 export const STR_DATA = 'data';
 export const STR_END = 'end';
 export const STR_CLOSE = 'close';
-export const EMPTY_FN = (): void => {};
-export const IDENTITY_FN = (val: unknown): unknown => val;
+export const EMPTY_FN = (): void => {
+    throw new Error("STUB");
+};
+export const IDENTITY_FN = (val: unknown): unknown => { throw new Error("STUB"); };
 
 const pl = process.platform;
 export const isWindows: boolean = pl === 'win32';
@@ -100,12 +102,7 @@ const addAndConvert = (main: Record<string, unknown>, prop: string, item: unknow
 };
 
 const clearItem = (cont: Record<string, unknown>) => (key: string) => {
-  const set = cont[key];
-  if (set instanceof Set) {
-    set.clear();
-  } else {
-    delete cont[key];
-  }
+    throw new Error("STUB");
 };
 
 const delFromSet = (main: Record<string, unknown> | Set<unknown>, prop: string, item: unknown) => {
@@ -151,14 +148,7 @@ function createFsWatchInstance(
   emitRaw: WatchHandlers['rawEmitter']
 ): NativeFsWatcher | undefined {
   const handleEvent: WatchListener<string> = (rawEvent, evPath: string | null) => {
-    listener(path);
-    emitRaw(rawEvent, evPath!, { watchedPath: path });
-
-    // emit based on events occurring for files from a directory's watcher in
-    // case the file's watcher misses it (and rely on throttling to de-dupe)
-    if (evPath && path !== evPath) {
-      fsWatchBroadcast(sp.resolve(path, evPath), KEY_LISTENERS, sp.join(path, evPath));
-    }
+      throw new Error("STUB");
   };
   try {
     return fs_watch(
@@ -188,7 +178,7 @@ const fsWatchBroadcast = (
   const cont = FsWatchInstances.get(fullPath);
   if (!cont) return;
   foreach(cont[listenerType as keyof typeof cont], (listener: any) => {
-    listener(val1, val2, val3);
+      throw new Error("STUB");
   });
 };
 
@@ -235,20 +225,7 @@ const setFsWatchListener = (
     );
     if (!watcher) return;
     watcher.on(EV.ERROR, async (error: Error & { code: string }) => {
-      const broadcastErr = fsWatchBroadcast.bind(null, fullPath, KEY_ERR);
-      if (cont) cont.watcherUnusable = true; // documented since Node 10.4.1
-      // Workaround for https://github.com/joyent/node/issues/4337
-      if (isWindows && error.code === 'EPERM') {
-        try {
-          const fd = await open(path, 'r');
-          await fd.close();
-          broadcastErr(error);
-        } catch (err) {
-          // do nothing
-        }
-      } else {
-        broadcastErr(error);
-      }
+        throw new Error("STUB");
     });
     cont = {
       listeners: listener,
@@ -263,20 +240,7 @@ const setFsWatchListener = (
   // removes this instance's listeners and closes the underlying fs_watch
   // instance if there are no more listeners left
   return () => {
-    delFromSet(cont, KEY_LISTENERS, listener);
-    delFromSet(cont, KEY_ERR, errHandler);
-    delFromSet(cont, KEY_RAW, rawEmitter);
-    if (isEmptySet(cont.listeners)) {
-      // Check to protect against issue gh-730.
-      // if (cont.watcherUnusable) {
-      cont.watcher.close();
-      // }
-      FsWatchInstances.delete(fullPath);
-      HANDLER_KEYS.forEach(clearItem(cont));
-      // @ts-ignore
-      cont.watcher = undefined;
-      Object.freeze(cont);
-    }
+      throw new Error("STUB");
   };
 };
 
@@ -331,13 +295,7 @@ const setFsWatchFileListener = (
       rawEmitters: rawEmitter,
       options,
       watcher: watchFile(fullPath, options, (curr, prev) => {
-        foreach(cont.rawEmitters, (rawEmitter) => {
-          rawEmitter(EV.CHANGE, fullPath, { curr, prev });
-        });
-        const currmtime = curr.mtimeMs;
-        if (curr.size !== prev.size || currmtime > prev.mtimeMs || currmtime === 0) {
-          foreach(cont.listeners, (listener) => listener(path, curr));
-        }
+          throw new Error("STUB");
       }),
     };
     FsWatchFileInstances.set(fullPath, cont);
@@ -347,14 +305,7 @@ const setFsWatchFileListener = (
   // Removes this instance's listeners and closes the underlying fs_watchFile
   // instance if there are no more listeners left.
   return () => {
-    delFromSet(cont, KEY_LISTENERS, listener);
-    delFromSet(cont, KEY_RAW, rawEmitter);
-    if (isEmptySet(cont.listeners)) {
-      FsWatchFileInstances.delete(fullPath);
-      unwatchFile(fullPath);
-      cont.options = cont.watcher = undefined;
-      Object.freeze(cont);
-    }
+      throw new Error("STUB");
   };
 };
 
@@ -366,7 +317,7 @@ export class NodeFsHandler {
   _boundHandleError: (error: unknown) => void;
   constructor(fsW: FSWatcher) {
     this.fsw = fsW;
-    this._boundHandleError = (error) => fsW._handleError(error as Error);
+    this._boundHandleError = (error) => { throw new Error("STUB"); };
   }
 
   /**
@@ -547,73 +498,18 @@ export class NodeFsHandler {
     const current = new Set();
 
     let stream = this.fsw._readdirp(directory, {
-      fileFilter: (entry: EntryInfo) => wh.filterPath(entry),
-      directoryFilter: (entry: EntryInfo) => wh.filterDir(entry),
+      fileFilter: (entry: EntryInfo) => { throw new Error("STUB"); },
+      directoryFilter: (entry: EntryInfo) => { throw new Error("STUB"); },
     });
     if (!stream) return;
     stream
       .on(STR_DATA, async (entry) => {
-        if (this.fsw.closed) {
-          stream = undefined;
-          return;
-        }
-        const item = entry.path;
-        let path = sp.join(directory, item);
-        current.add(item);
-
-        if (
-          entry.stats.isSymbolicLink() &&
-          (await this._handleSymlink(entry, directory, path, item))
-        ) {
-          return;
-        }
-
-        if (this.fsw.closed) {
-          stream = undefined;
-          return;
-        }
-        // Files that present in current directory snapshot
-        // but absent in previous are added to watch list and
-        // emit `add` event.
-        if (item === target || (!target && !previous.has(item))) {
-          this.fsw._incrReadyCount();
-
-          // ensure relativeness of path is preserved in case of watcher reuse
-          path = sp.join(dir, sp.relative(dir, path));
-
-          this._addToNodeFs(path, initialAdd, wh, depth + 1);
-        }
+          throw new Error("STUB");
       })
       .on(EV.ERROR, this._boundHandleError);
 
     return new Promise((resolve, reject) => {
-      if (!stream) return reject();
-      stream.once(STR_END, () => {
-        if (this.fsw.closed) {
-          stream = undefined;
-          return;
-        }
-        const wasThrottled = throttler ? throttler.clear() : false;
-
-        resolve(undefined);
-
-        // Files that absent in current directory snapshot
-        // but present in previous emit `remove` event
-        // and are removed from @watched[directory].
-        previous
-          .getChildren()
-          .filter((item) => {
-            return item !== directory && !current.has(item);
-          })
-          .forEach((item) => {
-            this.fsw._remove(directory, item);
-          });
-
-        stream = undefined;
-
-        // one more time for any missed in case changes came in extremely quickly
-        if (wasThrottled) this._handleRead(directory, false, wh, target, dir, depth, throttler);
-      });
+        throw new Error("STUB");
     });
   }
 
@@ -657,10 +553,7 @@ export class NodeFsHandler {
       }
 
       closer = this._watchWithNodeFs(dir, (dirPath, stats) => {
-        // if current directory is removed, do nothing
-        if (stats && stats.mtimeMs === 0) return;
-
-        this._handleRead(dirPath, false, wh, target, dir, depth, throttler);
+          throw new Error("STUB");
       });
     }
     return closer;
@@ -690,8 +583,8 @@ export class NodeFsHandler {
 
     const wh = this.fsw._getWatchHelpers(path);
     if (priorWh) {
-      wh.filterPath = (entry) => priorWh.filterPath(entry);
-      wh.filterDir = (entry) => priorWh.filterDir(entry);
+      wh.filterPath = (entry) => { throw new Error("STUB"); };
+      wh.filterDir = (entry) => { throw new Error("STUB"); };
     }
 
     // evaluate what is at the path we're being asked to watch

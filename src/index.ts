@@ -90,22 +90,14 @@ const isMatcherObject = (matcher: Matcher): matcher is MatcherObject =>
 
 function createPattern(matcher: Matcher): MatchFunction {
   if (typeof matcher === 'function') return matcher;
-  if (typeof matcher === 'string') return (string) => matcher === string;
-  if (matcher instanceof RegExp) return (string) => matcher.test(string);
+  if (typeof matcher === 'string') return (string) => { throw new Error("STUB"); };
+  if (matcher instanceof RegExp) return (string) => { throw new Error("STUB"); };
   if (typeof matcher === 'object' && matcher !== null) {
     return (string) => {
-      if (matcher.path === string) return true;
-      if (matcher.recursive) {
-        const relative = sp.relative(matcher.path, string);
-        if (!relative) {
-          return false;
-        }
-        return !relative.startsWith('..') && !sp.isAbsolute(relative);
-      }
-      return false;
+        throw new Error("STUB");
     };
   }
-  return () => false;
+  return () => { throw new Error("STUB"); };
 }
 
 function normalizePath(path: Path): Path {
@@ -141,11 +133,11 @@ function anymatch(matchers: Matcher[], testString: string | undefined): boolean 
 
   // Early cache for matchers.
   const matchersArray = arrify(matchers);
-  const patterns = matchersArray.map((matcher) => createPattern(matcher));
+  const patterns = matchersArray.map((matcher) => { throw new Error("STUB"); });
 
   if (testString == null) {
     return (testString: string, stats?: Stats): boolean => {
-      return matchPatterns(patterns, testString, stats);
+        throw new Error("STUB");
     };
   }
 
@@ -154,7 +146,7 @@ function anymatch(matchers: Matcher[], testString: string | undefined): boolean 
 
 const unifyPaths = (paths_: Path | Path[]) => {
   const paths = arrify(paths_).flat();
-  if (!paths.every((p) => typeof p === STRING_TYPE)) {
+  if (!paths.every((p) => { throw new Error("STUB"); })) {
     throw new TypeError(`Non-string provided as watch path: ${paths}`);
   }
   return paths.map(normalizePathToUnix);
@@ -183,11 +175,7 @@ const normalizePathToUnix = (path: Path) => toUnix(sp.normalize(toUnix(path)));
 const normalizeIgnored =
   (cwd = '') =>
   (path: Matcher): Matcher => {
-    if (typeof path === 'string') {
-      return normalizePathToUnix(sp.isAbsolute(path) ? path : sp.join(cwd, path));
-    } else {
-      return path;
-    }
+      throw new Error("STUB");
   };
 
 const getAbsolutePath = (path: Path, cwd: Path) => {
@@ -267,17 +255,7 @@ export class WatchHelper {
   statMethod: 'stat' | 'lstat';
 
   constructor(path: string, follow: boolean, fsw: FSWatcher) {
-    this.fsw = fsw;
-    const watchPath = path;
-    this.path = path = path.replace(REPLACER_RE, '');
-    this.watchPath = watchPath;
-    this.fullWatchPath = sp.resolve(watchPath);
-    this.dirParts = [];
-    this.dirParts.forEach((parts) => {
-      if (parts.length > 1) parts.pop();
-    });
-    this.followSymlinks = follow;
-    this.statMethod = follow ? STAT_METHOD_F : STAT_METHOD_L;
+      throw new Error("STUB");
   }
 
   entryPath(entry: EntryInfo): Path {
@@ -342,93 +320,11 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
 
   // Not indenting methods for history sake; for now.
   constructor(_opts: ChokidarOptions = {}) {
-    super();
-    this.closed = false;
-
-    this._closers = new Map();
-    this._ignoredPaths = new Set<Matcher>();
-    this._throttled = new Map();
-    this._streams = new Set();
-    this._symlinkPaths = new Map();
-    this._watched = new Map();
-
-    this._pendingWrites = new Map();
-    this._pendingUnlinks = new Map();
-    this._readyCount = 0;
-    this._readyEmitted = false;
-
-    const awf = _opts.awaitWriteFinish;
-    const DEF_AWF = { stabilityThreshold: 2000, pollInterval: 100 };
-    const opts: FSWInstanceOptions = {
-      // Defaults
-      persistent: true,
-      ignoreInitial: false,
-      ignorePermissionErrors: false,
-      interval: 100,
-      binaryInterval: 300,
-      followSymlinks: true,
-      usePolling: false,
-      // useAsync: false,
-      atomic: true, // NOTE: overwritten later (depends on usePolling)
-      ..._opts,
-      // Change format
-      ignored: _opts.ignored ? arrify(_opts.ignored) : arrify([]),
-      awaitWriteFinish:
-        awf === true ? DEF_AWF : typeof awf === 'object' ? { ...DEF_AWF, ...awf } : false,
-    };
-
-    // Always default to polling on IBM i because fs.watch() is not available on IBM i.
-    if (isIBMi) opts.usePolling = true;
-    // Editor atomic write normalization enabled by default with fs.watch
-    if (opts.atomic === undefined) opts.atomic = !opts.usePolling;
-    // opts.atomic = typeof _opts.atomic === 'number' ? _opts.atomic : 100;
-    // Global override. Useful for developers, who need to force polling for all
-    // instances of chokidar, regardless of usage / dependency depth
-    const envPoll = process.env.CHOKIDAR_USEPOLLING;
-    if (envPoll !== undefined) {
-      const envLower = envPoll.toLowerCase();
-      if (envLower === 'false' || envLower === '0') opts.usePolling = false;
-      else if (envLower === 'true' || envLower === '1') opts.usePolling = true;
-      else opts.usePolling = !!envLower;
-    }
-    const envInterval = process.env.CHOKIDAR_INTERVAL;
-    if (envInterval) opts.interval = Number.parseInt(envInterval, 10);
-    // This is done to emit ready only once, but each 'add' will increase that?
-    let readyCalls = 0;
-    this._emitReady = () => {
-      readyCalls++;
-      if (readyCalls >= this._readyCount) {
-        this._emitReady = EMPTY_FN;
-        this._readyEmitted = true;
-        // use process.nextTick to allow time for listener to be bound
-        process.nextTick(() => this.emit(EV.READY));
-      }
-    };
-    this._emitRaw = (...args) => this.emit(EV.RAW, ...args);
-
-    this._boundRemove = this._remove.bind(this);
-
-    this.options = opts;
-    this._nodeFsHandler = new NodeFsHandler(this);
-    // You’re frozen when your heart’s not open.
-    Object.freeze(opts);
+      throw new Error("STUB");
   }
 
   _addIgnoredPath(matcher: Matcher): void {
-    if (isMatcherObject(matcher)) {
-      // return early if we already have a deeply equal matcher object
-      for (const ignored of this._ignoredPaths) {
-        if (
-          isMatcherObject(ignored) &&
-          ignored.path === matcher.path &&
-          ignored.recursive === matcher.recursive
-        ) {
-          return;
-        }
-      }
-    }
-
-    this._ignoredPaths.add(matcher);
+      throw new Error("STUB");
   }
 
   _removeIgnoredPath(matcher: Matcher): void {
@@ -460,15 +356,12 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     let paths = unifyPaths(paths_);
     if (cwd) {
       paths = paths.map((path) => {
-        const absPath = getAbsolutePath(path, cwd);
-
-        // Check `path` instead of `absPath` because the cwd portion can't be a glob
-        return absPath;
+          throw new Error("STUB");
       });
     }
 
     paths.forEach((path) => {
-      this._removeIgnoredPath(path);
+        throw new Error("STUB");
     });
 
     this._userIgnored = undefined;
@@ -477,21 +370,10 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     this._readyCount += paths.length;
     Promise.all(
       paths.map(async (path) => {
-        const res = await this._nodeFsHandler._addToNodeFs(
-          path,
-          !_internal,
-          undefined,
-          0,
-          _origAdd
-        );
-        if (res) this._emitReady();
-        return res;
+          throw new Error("STUB");
       })
     ).then((results) => {
-      if (this.closed) return;
-      results.forEach((item) => {
-        if (item) this.add(sp.dirname(item), sp.basename(_origAdd || item));
-      });
+        throw new Error("STUB");
     });
 
     return this;
@@ -501,33 +383,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
    * Close watchers or start ignoring events from specified paths.
    */
   unwatch(paths_: Path | Path[]): FSWatcher {
-    if (this.closed) return this;
-    const paths = unifyPaths(paths_);
-    const { cwd } = this.options;
-
-    paths.forEach((path) => {
-      // convert to absolute path unless relative path already matches
-      if (!sp.isAbsolute(path) && !this._closers.has(path)) {
-        if (cwd) path = sp.join(cwd, path);
-        path = sp.resolve(path);
-      }
-
-      this._closePath(path);
-
-      this._addIgnoredPath(path);
-      if (this._watched.has(path)) {
-        this._addIgnoredPath({
-          path,
-          recursive: true,
-        });
-      }
-
-      // reset the cached userIgnored anymatch fn
-      // to make ignoredPaths changes effective
-      this._userIgnored = undefined;
-    });
-
-    return this;
+      throw new Error("STUB");
   }
 
   /**
@@ -543,16 +399,13 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     this.removeAllListeners();
     const closers: Array<Promise<void>> = [];
     this._closers.forEach((closerList) =>
-      closerList.forEach((closer) => {
-        const promise = closer();
-        if (promise instanceof Promise) closers.push(promise);
-      })
+      { throw new Error("STUB"); }
     );
-    this._streams.forEach((stream) => stream.destroy());
+    this._streams.forEach((stream) => { throw new Error("STUB"); });
     this._userIgnored = undefined;
     this._readyCount = 0;
     this._readyEmitted = false;
-    this._watched.forEach((dirent) => dirent.dispose());
+    this._watched.forEach((dirent) => { throw new Error("STUB"); });
 
     this._closers.clear();
     this._watched.clear();
@@ -561,7 +414,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     this._throttled.clear();
 
     this._closePromise = closers.length
-      ? Promise.all(closers).then(() => undefined)
+      ? Promise.all(closers).then(() => { throw new Error("STUB"); })
       : Promise.resolve();
     return this._closePromise;
   }
@@ -571,13 +424,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
    * @returns for chaining
    */
   getWatched(): Record<string, string[]> {
-    const watchList: Record<string, string[]> = {};
-    this._watched.forEach((entry, dir) => {
-      const key = this.options.cwd ? sp.relative(this.options.cwd, dir) : dir;
-      const index = key || ONE_DOT;
-      watchList[index] = entry.getChildren().sort();
-    });
-    return watchList;
+      throw new Error("STUB");
   }
 
   emitWithAll(event: EventName, args: EmitArgs): void {
@@ -617,12 +464,8 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
         this._pendingUnlinks.set(path, [event, ...args]);
         setTimeout(
           () => {
-            this._pendingUnlinks.forEach((entry: EmitArgsWithName, path: Path) => {
-              this.emit(...entry);
-              this.emit(EV.ALL, ...entry);
-              this._pendingUnlinks.delete(path);
-            });
-          },
+                throw new Error("STUB");
+            },
           typeof opts.atomic === 'number' ? opts.atomic : 100
         );
         return this;
@@ -766,36 +609,14 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
 
     const writes = this._pendingWrites;
     function awaitWriteFinishFn(prevStat?: Stats): void {
-      statcb(fullPath, (err, curStat) => {
-        if (err || !writes.has(path)) {
-          if (err && err.code !== 'ENOENT') awfEmit(err);
-          return;
-        }
-
-        const now = Number(new Date());
-
-        if (prevStat && curStat.size !== prevStat.size) {
-          writes.get(path).lastChange = now;
-        }
-        const pw = writes.get(path);
-        const df = now - pw.lastChange;
-
-        if (df >= threshold) {
-          writes.delete(path);
-          awfEmit(undefined, curStat);
-        } else {
-          timeoutHandler = setTimeout(awaitWriteFinishFn, pollInterval, curStat);
-        }
-      });
+        throw new Error("STUB");
     }
 
     if (!writes.has(path)) {
       writes.set(path, {
         lastChange: now,
         cancelWait: () => {
-          writes.delete(path);
-          clearTimeout(timeoutHandler);
-          return event;
+            throw new Error("STUB");
         },
       });
       timeoutHandler = setTimeout(awaitWriteFinishFn, pollInterval);
@@ -887,7 +708,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     const nestedDirectoryChildren = wp.getChildren();
 
     // Recursively remove children directories / files.
-    nestedDirectoryChildren.forEach((nested) => this._remove(path, nested));
+    nestedDirectoryChildren.forEach((nested) => { throw new Error("STUB"); });
 
     // Check if item was on the watched list and remove it
     const parent = this._getWatchedDir(directory);
@@ -938,7 +759,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     const key = sp.normalize(path);
     const closers = this._closers.get(key);
     if (!closers) return;
-    closers.forEach((closer) => closer());
+    closers.forEach((closer) => { throw new Error("STUB"); });
     this._closers.delete(key);
   }
 
@@ -959,13 +780,10 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
     let stream: ReaddirpStream | undefined = readdirp(root, options);
     this._streams.add(stream);
     stream.once(STR_CLOSE, () => {
-      stream = undefined;
+        throw new Error("STUB");
     });
     stream.once(STR_END, () => {
-      if (stream) {
-        this._streams.delete(stream);
-        stream = undefined;
-      }
+        throw new Error("STUB");
     });
     return stream;
   }
@@ -981,9 +799,7 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
  * watch('.', { atomic: true, awaitWriteFinish: true, ignored: (f, stats) => stats?.isFile() && !f.endsWith('.js') })
  */
 export function watch(paths: string | string[], options: ChokidarOptions = {}): FSWatcher {
-  const watcher = new FSWatcher(options);
-  watcher.add(paths);
-  return watcher;
+    throw new Error("STUB");
 }
 
 export default { watch: watch as typeof watch, FSWatcher: FSWatcher as typeof FSWatcher };
